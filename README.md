@@ -1,0 +1,1 @@
+To build into exe: pyinstaller dues_parser.py --onefile --noconsole --clean

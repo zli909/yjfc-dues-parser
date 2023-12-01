@@ -16,19 +16,24 @@ window = sg.Window("Dues Processing Tool", layout)
 
 sheets = ["Alumni", "Grad", "Undergrad", "Employees"]
 
+sheet_lookup = {
+    "Neither Current Staff or Student": "Alumni",
+    "Current GT Grad Student": "Grad",
+    "Current GT Undergrad Student": "Undergrad",
+    "Current GT Faculty/Staff": "Employees"
+}
+
+def find_member_type(item_varation):
+    for key in sheet_lookup:
+        if key in item_varation:
+            return key
+
 def process_dues():
     order_file_path = values["CSV_FILE"]
     dues_book_path = values["EXCEL_FILE"]
 
     # Your existing code for processing CSV and Excel goes here
     dues_book = xl.load_workbook(dues_book_path)
-
-    sheet_lookup = {
-        "Neither current staff or student": "Alumni",
-        "Current GT grad student": "Grad",
-        "Current GT undergrad student": "Undergrad",
-        "Current GT faculty/staff": "Employees"
-    }
     new_orders = []
 
     for sheetname in dues_book.sheetnames:
@@ -39,8 +44,10 @@ def process_dues():
 
     for sheet in new_sheets:
         dues_book.create_sheet(sheet)
-        dues_book[sheet].cell(1, 1, "Name")
-        dues_book[sheet].cell(1, 5, "Email")
+        dues_book[sheet].cell(1, 1, "Name (Semester)")
+        dues_book[sheet].cell(1, 2, "Name (Annual)")
+        dues_book[sheet].cell(1, 5, "Email (Semester)")
+        dues_book[sheet].cell(1, 6, "Email (Annual)")
 
     dues_book.save(dues_book_path)
 
@@ -52,12 +59,46 @@ def process_dues():
 
     for order in new_orders:
         exists = False
-        sheet_name = sheet_lookup[order["Item Variation"]]
+        member_type = find_member_type(order["Item Variation"])
+        sheet_name = sheet_lookup[member_type]
         sheet = dues_book[sheet_name]
+        name_column_for_dues_type = None
+        email_column_for_dues_type = None
+        next_empty_name_cell = None
+        next_empty_email_cell = None
+
+        # Search the semesterly dues members
         for cell in sheet["A"]:
             if (cell.value == order["Recipient Name"]):
                 exists = True
-        sheet.append([order["Recipient Name"], None, None, None, order["Recipient Email"]]) if not exists else None
+        # Search the annual dues members
+        for cell in sheet["B"]:
+            if (cell.value == order["Recipient Name"]):
+                exists = True
+
+        if not exists:
+            if "Annual" in order["Item Variation"]:
+                name_column_for_dues_type = 2
+                email_column_for_dues_type = 6
+            else:
+                name_column_for_dues_type = 1
+                email_column_for_dues_type = 5
+            
+            # find the next cell to put the member name in
+            for row in range(1, sheet.max_row + 2):
+                cell = sheet.cell(row=row, column=name_column_for_dues_type)
+                if cell.value is None:
+                    next_empty_name_cell = cell
+                    break
+            # find the next cell to put the member email in
+            for row in range(1, sheet.max_row + 2):
+                cell = sheet.cell(row=row, column=email_column_for_dues_type)
+                if cell.value is None:
+                    next_empty_email_cell = cell
+                    break
+            
+            next_empty_name_cell.value = order["Recipient Name"]
+            next_empty_email_cell.value = order["Recipient Email"]
 
     dues_book.save(dues_book_path)
 
